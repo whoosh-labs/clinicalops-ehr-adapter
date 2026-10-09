@@ -1,0 +1,26 @@
+.git
+.gitignore
+.github
+.devcontainer
+.venv
+venv
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+*.log
+firebase-debug.log
+Dockerfile
+.dockerignore
+README.md
+facesheet_to_csv_instructions.md
+Clinical_DataOps_Platform_Guide.html
+# Sample datasets and exports contain patient data; never bake them into the image
+AAMG/
+EPIC/
+*.pdf
+*.csv
+*.xls
+*.xlsx
+*.zip
