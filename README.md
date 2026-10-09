@@ -1,157 +1,100 @@
-# ⚡ Clinical DataOps Hub
+# clinicalops-ehr-adapter
 
-> **Automated Extraction, Transformation, Verification of Benefits (VOB) & Patient Matching Engine for Healthcare EHRs**
-
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://pdftocsv-1.streamlit.app/)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
-
-**Clinical DataOps Hub** is an end-to-end data operations platform built for medical clinics, billing teams, and clinical data engineers. It automates the extraction, cleansing, transformation, and normalization of complex patient schedules, face sheets, and eligibility reports across major Electronic Health Record (EHR) and Practice Management (PM) systems.
-
----
-
-## 🌟 Core Modules & Capabilities
-
-The platform provides dedicated, battle-tested ingestion and transformation modules:
-
-### 1. 📄 AthenaOne Schedule Extraction
-- **Input**: Daily AthenaOne schedule export PDFs.
-- **Parsing**: Automatically isolates appointment times, service dates, providers, patient demographics (Name, DOB), and insurance details (Payer, Policy #).
-- **Cleansing**: Intelligently ignores `FREE SLOT` placeholders, handles multi-line clinic department headers, and parses dynamic provider layouts.
-- **Batch Export**: Automatically chunks large schedules into portal-compatible 99-row files.
-
-### 2. 🔄 eClinicalWorks (ECW) Patient Matcher
-- **Input**: Multi-file CW Appointment CSVs + Eligibility / Insurance Master CSVs.
-- **Matching Engine**: Dual-tier deterministic and tokenized fuzzy matching:
-  - Exact match on normalized full name + DOB (`norm_name` + `norm_dob`).
-  - Tokenized cross-matching (`get_name_match_key`) to resolve discrepancies between `"Last, First M"` vs `"First Last"`.
-- **Audit Reports**: Produces reconciled datasets showing verified active appointments alongside unmatched exceptions.
-
-### 3. 📋 IMS Meditab Extraction
-- **Input**: Raw IMS Meditab billing logs, appointment registers, or pasted CSV text.
-- **Pipeline**: Normalizes appointment dates, validates primary vs secondary insurance priority flags, and generates clean CSV outputs tailored for downstream claim scrubbers.
-
-### 4. 📋 ModuleMD Extraction
-- **Input**: ModuleMD spreadsheet registers and schedule extracts.
-- **Pipeline**: Automated column header resolution, date standardization (`MM/DD/YYYY`), patient name segmentation, and policy number sanitization.
-
-### 5. 📁 EPIC Clinical DataOps & VOB Pipeline
-- **Input**: Raw EPIC schedule exports or Verification of Benefits (VOB) files (CSV, Excel `.xlsx`, `.xls`, or pasted text).
-- **AAMG / JMPN Member ID Cleaner**:
-  - **JMPN Anthem Blue Cross**: Enforces 12-digit standard by stripping 2-digit trailing suffixes from 14-digit IDs.
-  - **JMPN Healthy Employee Plan (HEP)**: Enforces 9-digit standard by stripping 2-digit trailing suffixes from 11-digit IDs.
-  - **Payer Protection**: Protects Commercial (non-JMPN) Anthem and third-party payers from unintended modification.
-- **EPIC Date Normalizer**: Detects and standardizes appointment dates and birth dates to `MM/DD/YYYY`.
-- **Export Standards**: Produces 100-row chunked files with `QUOTE_ALL` compliance for seamless payer portal uploading, complete with audit trail logs.
-
-### 6. 📑 ModMed Face Sheet & Patient Schedule to CSV
-- **Input**:
-  - **Format A**: ModMed Face Sheet PDFs (e.g. `vegas-week-of-5th_oc.pdf`, `dmv.pdf`).
-  - **Format B**: PatientDemoGraphicData CSV exports (40-column appointment files).
-- **Name Engine**: Cleans titles (`Mr`, `Dr`, etc.), preserves suffixes (`Jr`, `III`), and respects Spanish compound surname particles (`DE`, `DEL`, `SAN`, `LOS`).
-- **Payer Filtering Rules**:
-  - Automatically identifies and filters manufacturer copay & patient-support assistance programs (e.g. Xolair, Tezspire, Dupixent, Nucala, Fasenra, Cinqair, MyWay) that cannot be verified via VOB eligibility.
-  - Preserves legitimate government payers (e.g. Maryland Medical Assistance).
-  - Automatically excludes self-pay, empty carriers, and placeholder policies (`0`, `1`).
-- **File Splitting**: Strictly caps files at 99 patient rows (100 lines total with header) while guaranteeing Primary and Secondary insurance rows for the same appointment remain in the same part file.
-- **Dual Runtime**: Accessible via the Streamlit web dashboard or as a standalone CLI script (`facesheet_to_csv.py`).
-
----
-
-## 🏗️ Repository Architecture
+Turns a raw EHR export (schedule PDF, face sheet, spreadsheet) into the canonical CSV that the VOB import in
+`clinicalops-internal-api` expects. It is the service form of PDFTOCSV ("Clinical DataOps Hub"), whose
+per-EHR rules it keeps.
 
 ```
-├── app.py                             # Main Streamlit web application & UI
-├── facesheet_to_csv.py                # Standalone CLI tool for ModMed Face Sheet parsing
-├── facesheet_to_csv_instructions.md   # Specification & business rules documentation
-├── packages.txt                       # Linux system packages for deployment (poppler-utils)
-├── requirements.txt                   # Python runtime dependencies
-├── .streamlit/
-│   └── config.toml                    # Streamlit visual theme configuration
-├── AAMG/                              # AAMG sample dataset repository
-├── EPIC/                              # EPIC sample dataset repository
-└── Clinical_DataOps_Platform_Guide.html # Interactive visual platform reference guide
+admin UI ─► S3 ─► gateway /v1/vob/records/import
+                    gateway reads tenant pref VOB_ACTION.ehrSource
+                    └─► clinicalops-ehr-adapter POST /v1/normalize/{source} ─► canonical CSV
+                          └─► internal-api /vob/records/import/csv (existing import, then STDI)
 ```
 
----
+Only the gateway calls this service (ClusterIP, no ingress). It is stateless: uploads are parsed in memory,
+nothing is stored, and logs carry the source name and row counts only.
 
-## 🚀 Quick Start Guide
+## API
 
-### Prerequisites
-- Python 3.10 or higher
-- Poppler utilities (for high-speed PDF text parsing):
-  - **macOS**: `brew install poppler`
-  - **Ubuntu/Debian**: `sudo apt-get install -y poppler-utils`
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | liveness / readiness |
+| `GET /v1/sources` | supported sources: `athena`, `epic`, `meditab`, `modmed`, `modulemd` |
+| `POST /v1/normalize/{source}` | multipart `file`, optional `options` (JSON object) |
 
-### Installation
+Response `200`:
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/Yadav0896/PDFTOCSV.git
-   cd PDFTOCSV
-   ```
-
-2. **Create and activate a virtual environment**:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate    # On Windows: .venv\Scripts\activate
-   ```
-
-3. **Install Python dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
-
-## 💻 Usage
-
-### 1. Launching the Web Application
-Start the interactive Streamlit dashboard locally:
-```bash
-streamlit run app.py
-```
-Open your browser and navigate to:
-```
-http://localhost:8501
+```json
+{
+  "source": "modmed",
+  "csv": "Patient Name,DOB,Appt. Provider,Service Date,Insurance,Policy No.\n...",
+  "rowCount": 5,
+  "dropped": [{ "source": "page 3", "patientName": "BELL TATE, NORA K", "reason": "no insurance on file" }],
+  "stats": { "sourceUnits": 5, "rows": 5, "dropped": 4 },
+  "warnings": []
+}
 ```
 
-### 2. Using the Standalone Face Sheet CLI
-To process ModMed Face Sheet PDFs or Patient Demographic CSVs directly from the terminal without launching the UI:
-```bash
-python3 facesheet_to_csv.py /path/to/schedule_input.pdf /path/to/output_prefix
-```
-**Example output**:
-```bash
-/path/to/output_prefix_part1.csv: 99 patient rows (+ header)
-/path/to/output_prefix_part2.csv: 99 patient rows (+ header)
-...
-Source pages/rows=410 | Output rows=464 | Dropped=106
-Generated 5 file(s)
-Patients with secondary insurance: 70
-```
+- The CSV uses internal-api's canonical headers: `Patient Name, DOB, Appt. Provider, Service Date, Insurance,
+  Policy No.`, plus `Appointment Type, Clinic, Email, Phone` where the source has them.
+- Dates are `MM/DD/YYYY`. Policy numbers are kept as text, so leading zeros are preserved.
+- A row missing a required field (Patient Name, DOB, Service Date, Insurance, Policy No.) goes to `dropped`,
+  not into the CSV.
+- Errors:
+  - `404`: unknown source.
+  - `413`: the file is over `EHR_ADAPTER_MAX_FILE_MB` (default 25).
+  - `422`: the file doesn't match the source, or the options are invalid. `detail` says why.
+  - `500`: unexpected error. The message is generic and no details are logged.
 
----
+### Sources
 
-## ☁️ Deployment
-
-This project is pre-configured for **Streamlit Community Cloud**:
-- [`packages.txt`](packages.txt) ensures `poppler-utils` (`pdftotext`) is installed in the Linux runtime container.
-- High-resilience fallbacks guarantee identical, reliable extraction even if system libraries vary.
-
----
-
-## 📄 Output CSV Specifications
-
-For standardized insurance extracts, outputs adhere to the following strict format:
-
-| Column | Format / Source | Description |
+| Source | Files | What it does |
 |---|---|---|
-| `patient name` | `LAST, FIRST MIDDLE` | Cleaned of titles, casing preserved |
-| `date of service` | `MM/DD/YYYY` | Appointment date |
-| `birth date` | `MM/DD/YYYY` | Date of birth |
-| `appointment provider` | Source string | As printed in source |
-| `insurance name` | Normalized text | Manufacturer copay programs filtered |
-| `policy number` | Alphanumeric | Formatted as text (leading zeros preserved) |
+| `athena` | `.pdf` | AthenaOne schedule. Service date from the header, provider from department headers (Complete Allergy aliases built in), free slots skipped, wrapped `INS:` lines joined |
+| `modmed` | `.pdf`, `.csv` | Face sheet PDF: one page per appointment, `FIRST MIDDLE LAST` → `LAST, FIRST MIDDLE` (titles, suffixes, middle initial, particles), one row per insurance block. PatientDemoGraphicData CSV: the name is built from 3 columns. Copay/support programs, self-pay and placeholder policies are dropped |
+| `meditab` | `.csv`, `.txt` | IMS Meditab export: cp1252 fallback, one-line exports rebuilt, primary + secondary insurance as two rows |
+| `modulemd` | `.xls` (HTML), `.xlsx`, `.csv` | ModuleMD schedule: header row found under report titles, `Payer[policy]**Payer2[policy2]` split, time removed from the schedule date |
+| `epic` | `.csv`, `.xlsx`, `.xls` | EPIC / AAMG: JMPN Anthem IDs 14 → 12 chars, Healthy Employee Plan IDs 11 → 9, day-first files auto-detected. Options: `dateFormat` (`auto`, `mm/dd/yyyy`, `dd/mm/yyyy`), `strictJmpnAnthem` (default `true`), `anthemAliases`, `healthyEmployeeAliases` |
 
-> 💡 **Excel Tip**: When opening output CSV files in Microsoft Excel, use the **Text Import Wizard** to import the `policy number` column as **Text** to prevent Excel from dropping leading zeros.
+`ecw` (two files: appointments + eligibility) is not exposed yet.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `ehr_adapter/pipelines/` | per-EHR processing, moved unchanged from PDFTOCSV's `app.py` |
+| `ehr_adapter/normalize.py` | runs a pipeline and maps its output to the canonical CSV |
+| `ehr_adapter/api.py` | FastAPI app |
+| `ehr_adapter/exports.py` | ZIP/part-file helpers for the Streamlit UI and the CLI (not used by the API) |
+| `app.py` | the Streamlit UI (kept until every tenant is cut over) |
+| `facesheet_to_csv.py` | ModMed face sheet CLI |
+| `tests/` | pytest suite; `tests/fixtures.py` builds synthetic exports in code |
+
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/) and, for face-sheet PDFs, `pdftotext` (`brew install poppler` /
+`apt-get install poppler-utils`). Without it, PDFs are read with pdfplumber, whose column positions can differ.
+
+```bash
+uv sync --all-groups --extra ui                     # dependencies, plus Streamlit for app.py
+uv run pytest                                       # tests
+uv run ruff check .                                 # lint
+uv run uvicorn ehr_adapter.api:app --reload         # API on http://localhost:8000
+uv run --extra ui streamlit run app.py              # Streamlit UI
+uv run python facesheet_to_csv.py in.pdf out/prefix # face sheet CLI
+```
+
+```bash
+curl -F file=@schedule.pdf http://localhost:8000/v1/normalize/athena
+curl -F file=@aamg.csv -F 'options={"dateFormat":"dd/mm/yyyy"}' http://localhost:8000/v1/normalize/epic
+```
+
+Never commit real EHR exports. `.gitignore` blocks `*.pdf`, `*.csv`, `*.xls*` and `*.txt`; tests build
+synthetic files in code.
+
+## Deployment
+
+- **Image:** built from `Dockerfile` (Python 3.12, poppler, non-root, port 8000) as
+  `ragaai/clinicalops-ehr-adapter:<build>` by the shared Jenkins pipeline.
+- **Kubernetes:** deployed from `clinicalops-core-infra` (`helm-charts/clinicalops-services`) as the ClusterIP
+  Service `clinicalops-ehr-adapter`, port 80 → 8000, with `/health` probes.

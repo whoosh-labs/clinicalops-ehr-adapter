@@ -22,7 +22,7 @@ The script detects the format from the file extension: `.pdf` is Format A, and `
 | patient name | `Pat L Name`, `Pat F Name`, `Pat M Initial` | `Last, First M` (initial included only if present), original casing |
 | date of service | `Date` | `2026-10-05` → `10/05/2026` |
 | birth date | `Pat Birthdate` | already `mm/dd/yyyy` |
-| appointment provider | `ProviderName` | as printed, e.g. `Mayer Chad W`. Do **not** use `ResourceName`, which holds values like OIT or Allergy Shots |
+| appointment provider | `ProviderName` | as printed, e.g. `Rivera Ana L`. Do **not** use `ResourceName`, which holds values like OIT or Allergy Shots |
 | insurance name | `Primary Insurance Name` | as printed |
 | policy number | `Primary Ins Subscriber No` | as printed (not the Group No) |
 
@@ -37,7 +37,7 @@ patient name,date of service,birth date,appointment provider,insurance name,poli
 | patient name | `LAST, FIRST MIDDLE` (see name rules) |
 | date of service | `mm/dd/yyyy`, the appointment date |
 | birth date | `mm/dd/yyyy`, from D.O.B |
-| appointment provider | as printed in the source (Format A: `Bellak, Jason`; Format B: `Mayer Chad W`) |
+| appointment provider | as printed in the source (Format A: `Rivera, Ana`; Format B: `Rivera Ana L`) |
 | insurance name | full carrier name, with wrapped lines joined by a single space |
 | policy number | as printed, kept as text (leading zeros preserved) |
 
@@ -61,14 +61,14 @@ patient name,date of service,birth date,appointment provider,insurance name,poli
    - Drop only the program row. The patient's real Primary/Secondary insurance rows stay. If the program was the patient's only insurance, the patient is dropped like any other patient with no insurance.
    - Do **not** drop government payers just because their name contains "Assistance". For example, Maryland Medicaid is called "Medical Assistance", and it is a real payer.
    - Report the support-program drops as a count per program in the summary rather than listing every row.
-5. **Keep everything else exactly as printed**, including "Testing" providers (e.g. `Quiamzon, Testing`) and biologic or injection resources used as providers (e.g. `Shot, Biologic`, `K STREET, BIOLOGICS`). Mention them in the summary, but don't remove them.
+5. **Keep everything else exactly as printed**, including "Testing" providers (e.g. `Lopez, Testing`) and biologic or injection resources used as providers (e.g. `Shot, Biologic`, `K STREET, BIOLOGICS`). Mention them in the summary, but don't remove them.
 6. **Name rules (Format A only;** Format B already has separate name fields):
    - Remove titles: Mr, Mrs, Ms, Dr, Miss (with or without a period).
-   - The last word is the last name, and everything before it is first plus middle. Keep the original casing. Example: `BRANDON Bernard REITH` → `REITH, BRANDON Bernard`.
-   - Suffixes (Jr, Sr, II, III, IV) attach to the last name. Example: `JAMES Daniel THOMAS, III` → `THOMAS III, JAMES Daniel`.
-   - If the second word is a middle initial, everything after it is the last name. Example: `MONA L ALLEN MERKLEIN` → `ALLEN MERKLEIN, MONA L`.
-   - Surname particles stay with the last name (SAN, DE, DEL, LA, LOS, VAN, VON, DA, DI, ST). Examples: `JOANN D SAN AGUSTIN` → `SAN AGUSTIN, JOANN D`; `LUIS DE LOS SANTOS` → `DE LOS SANTOS, LUIS`.
-   - Flag possible compound Hispanic surnames for review, but don't change them. Example: `ELMA SOFIA VEGA HERNANDEZ` → `HERNANDEZ, ELMA SOFIA VEGA`.
+   - The last word is the last name, and everything before it is first plus middle. Keep the original casing. Example: `ANNA Marie COLE` → `COLE, ANNA Marie`.
+   - Suffixes (Jr, Sr, II, III, IV) attach to the last name. Example: `PETER James HALL, III` → `HALL III, PETER James`.
+   - If the second word is a middle initial, everything after it is the last name. Example: `NORA K BELL TATE` → `BELL TATE, NORA K`.
+   - Surname particles stay with the last name (SAN, DE, DEL, LA, LOS, VAN, VON, DA, DI, ST). Examples: `JUAN D SAN MARTIN` → `SAN MARTIN, JUAN D`; `ROSA DE LA CRUZ` → `DE LA CRUZ, ROSA`.
+   - Flag possible compound Hispanic surnames for review, but don't change them. Example: `LUCIA MARIA VEGA ROJAS` → `ROJAS, LUCIA MARIA VEGA`.
 
 ## How to run
 
@@ -113,7 +113,7 @@ def fmt_name(n):
         first, last = t[:2], t[2:]
     else:
         k = len(t) - 1
-        while k > 1 and t[k-1].upper() in PART: k -= 1  # SAN AGUSTIN, DE LA ...
+        while k > 1 and t[k-1].upper() in PART: k -= 1  # SAN MARTIN, DE LA ...
         first, last = t[:k], t[k:]
     return f"{' '.join(last)}{' ' + suf if suf else ''}, {' '.join(first)}"
 
