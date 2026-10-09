@@ -1,8 +1,20 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
 .DS_Store
 .streamlit/
 firebase-debug.log
+
+# Never commit EHR exports: they contain PHI. Test fixtures are generated in code (tests/fixtures.py).
 AAMG/
 EPIC/
+*.pdf
+*.csv
+*.xls
+*.xlsx
+*.txt
+!requirements.txt
+!packages.txt
